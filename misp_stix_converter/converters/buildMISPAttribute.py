@@ -4,12 +4,16 @@ import cybox
 import logging
 import hashlib
 import ast
+import stix
 from pymisp import mispevent
+from stix.core import Incident
+
 from misp_stix_converter.converters.lint_roller import lintRoll
 from stix.core import STIXPackage
 
 
 # Cybox cybox don't we all love cybox children
+
 from cybox.objects import email_message_object, file_object, address_object, socket_address_object
 from cybox.objects import domain_name_object, hostname_object, uri_object
 from cybox.objects import mutex_object, whois_object
@@ -249,6 +253,7 @@ def identifyHash(hsh):
 
 
 def buildEvent(pkg, **kwargs):
+
     log.info("Building Event...")
     if not pkg.stix_header:
         title = "STIX Import"
@@ -257,6 +262,7 @@ def buildEvent(pkg, **kwargs):
             title = "STIX Import"
         else:
             title = pkg.stix_header.title
+
     log.info("Using title %s", title)
 
     log.debug("Seting up MISPEvent...")
@@ -273,7 +279,10 @@ def buildEvent(pkg, **kwargs):
     log.debug("Beginning to Lint_roll...")
     ids = []
     to_process = []
+
     for obj in lintRoll(pkg):
+        if isinstance(obj, stix.core.Incident):
+            to_process.append(obj)
         if isinstance(obj, cybox.core.observable.Observable):
             if obj.id_ not in ids:
                 ids.append(obj.id_)
@@ -306,6 +315,7 @@ def buildEvent(pkg, **kwargs):
 def buildAttribute(pkg, mispEvent):
     try:
         # Check if the object is a cybox observable
+
         if isinstance(pkg, cybox.core.observable.Observable):
             if hasattr(pkg, "object_") and pkg.object_:
 
@@ -369,6 +379,11 @@ def buildAttribute(pkg, mispEvent):
                     log.debug("Type not syncing %s", type_)
             else:
                 pass
+        elif isinstance(pkg, Incident):
+            mispEvent.add_attribute('text',
+                                    pkg.title or None,
+                                    comment=str(pkg.title) + " | " +str(pkg.description).replace(" =  ", ""),
+                                    category='Internal reference')
         else:
             pass  # Other objects. TODO.
     except Exception as ex:
